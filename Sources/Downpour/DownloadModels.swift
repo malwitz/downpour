@@ -64,6 +64,18 @@ enum ProgressParser {
     }
 }
 
+enum DownloadOutputParser {
+    private static let completedFilePrefix = "downpour-final:"
+
+    static func completedFileURL(from line: String) -> URL? {
+        guard line.hasPrefix(completedFilePrefix) else { return nil }
+        let path = String(line.dropFirst(completedFilePrefix.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard path.hasPrefix("/") else { return nil }
+        return URL(fileURLWithPath: path)
+    }
+}
+
 enum YTDLPFormat {
     /// Prefer codecs supported natively by QuickTime: H.264 video and AAC in M4A.
     static func quickTimeVideo(quality: VideoQuality) -> String {

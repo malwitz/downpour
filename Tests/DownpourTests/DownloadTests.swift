@@ -28,3 +28,10 @@ import Testing
     #expect(!best.contains("/best[ext=mp4]"))
     #expect(capped.contains("[height<=720]"))
 }
+
+@Test func readsFinalMediaPathFromDownloaderOutput() {
+    let line = "downpour-final:/Users/example/Downloads/My Video.mp4"
+    #expect(DownloadOutputParser.completedFileURL(from: line)?.path == "/Users/example/Downloads/My Video.mp4")
+    #expect(DownloadOutputParser.completedFileURL(from: "[download] 100%") == nil)
+    #expect(DownloadOutputParser.completedFileURL(from: "downpour-final:relative.mp3") == nil)
+}

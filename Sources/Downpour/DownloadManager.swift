@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import Foundation
 
 @MainActor
@@ -13,6 +14,7 @@ final class DownloadManager: ObservableObject {
 
     private var process: Process?
     private var outputBuffer = ""
+    private var completedFiles = Set<URL>()
 
     init() {
         outputFolder = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
@@ -58,6 +60,7 @@ final class DownloadManager: ObservableObject {
 
         progress = 0
         outputBuffer = ""
+        completedFiles = []
         state = .downloading
         statusText = "Preparing download…"
 
@@ -82,7 +85,10 @@ final class DownloadManager: ObservableObject {
 
         task.terminationHandler = { [weak self] completedTask in
             pipe.fileHandleForReading.readabilityHandler = nil
+            let remainingData = pipe.fileHandleForReading.readDataToEndOfFile()
+            let remainingText = String(data: remainingData, encoding: .utf8) ?? ""
             Task { @MainActor [weak self] in
+                self?.consume(remainingText)
                 self?.finish(exitCode: completedTask.terminationStatus)
             }
         }
@@ -111,6 +117,7 @@ final class DownloadManager: ObservableObject {
             "--no-playlist",
             "--no-overwrites",
             "--progress-template", "download:%(progress._percent_str)s",
+            "--print", "after_move:downpour-final:%(filepath)s",
             "--paths", outputFolder.path,
             "--output", "%(title).180B.%(ext)s"
         ]
@@ -133,18 +140,18 @@ final class DownloadManager: ObservableObject {
         outputBuffer = lines.last ?? ""
 
         for line in lines.dropLast() {
-            if let fraction = ProgressParser.fraction(from: line) {
-                progress = fraction
-                statusText = "Downloading \(Int(fraction * 100))%"
-            } else if line.contains("Merging formats") || line.contains("ExtractAudio") {
-                statusText = kind == .audio ? "Creating MP3…" : "Finishing video…"
-            }
+            processLine(line)
         }
     }
 
     private func finish(exitCode: Int32) {
+        if !outputBuffer.isEmpty {
+            processLine(outputBuffer)
+            outputBuffer = ""
+        }
         process = nil
         if exitCode == 0 {
+            completedFiles.forEach(clearQuarantineIfSafe)
             progress = 1
             state = .finished
             statusText = "Download complete"
@@ -152,6 +159,28 @@ final class DownloadManager: ObservableObject {
         } else if state.isDownloading {
             state = .failed("yt-dlp exited with code \(exitCode)")
             statusText = "Download failed"
+        }
+    }
+
+    private func processLine(_ line: String) {
+        if let file = DownloadOutputParser.completedFileURL(from: line) {
+            completedFiles.insert(file)
+        } else if let fraction = ProgressParser.fraction(from: line) {
+            progress = fraction
+            statusText = "Downloading \(Int(fraction * 100))%"
+        } else if line.contains("Merging formats") || line.contains("ExtractAudio") {
+            statusText = kind == .audio ? "Creating MP3…" : "Finishing video…"
+        }
+    }
+
+    private func clearQuarantineIfSafe(from file: URL) {
+        let destination = outputFolder.standardizedFileURL.path + "/"
+        let candidate = file.standardizedFileURL.path
+        guard candidate.hasPrefix(destination),
+              FileManager.default.fileExists(atPath: candidate) else { return }
+
+        candidate.withCString { path in
+            _ = removexattr(path, "com.apple.quarantine", 0)
         }
     }
 

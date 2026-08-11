@@ -9,6 +9,7 @@ Downpour uses an original rain-soaked sheep mascot, packaged as a complete macOS
 - Video downloads in Best, 1080p, 720p, or 480p
 - QuickTime-compatible H.264 video with AAC audio
 - Strict codec selection: incompatible AV1/VP9 and Opus fallbacks are rejected
+- Clears the Gatekeeper quarantine marker from completed files created by Downpour, preventing repeat media-open warnings
 - MP3 audio extraction
 - Destination folder picker
 - Live progress and cancellation
@@ -35,6 +36,15 @@ open dist/Downpour.app
 ```
 
 The script builds a release binary, creates `dist/Downpour.app`, and applies an ad-hoc local signature. Full Xcode is not required.
+
+## Build a drag-to-install disk image
+
+```sh
+chmod +x scripts/build-dmg.sh
+./scripts/build-dmg.sh
+```
+
+This creates a versioned Apple Silicon `.dmg` in `outputs/`, containing the app, an Applications-folder shortcut, and setup instructions.
 
 ## Development
 
